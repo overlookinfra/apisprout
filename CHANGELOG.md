@@ -1,3 +1,14 @@
+# [1.4.0](https://github.com/puppetlabs/apisprout/compare/v1.3.0...v1.4.0) (2019-08-18)
+
+
+### Build
+
+* Automatically release ([5ba016737ed1e3cd3feae19540e2f396b9b63533](https://github.com/puppetlabs/apisprout/commit/5ba016737ed1e3cd3feae19540e2f396b9b63533))
+
+### Update
+
+* Match all relevant JSON and YAML media types ([e046dd2a99faffd5b3d365459c980393913f610b](https://github.com/puppetlabs/apisprout/commit/e046dd2a99faffd5b3d365459c980393913f610b))
+
 # Changelog
 All notable changes to this project will be documented in this file.
 
