@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/puppetlabs/apisprout/compare/v1.4.0...v1.5.0) (2019-08-18)
+
+
+### New
+
+* Add support for allOf, anyOf, and oneOf ([4a95528cadbd174f1b4d32dc28d4ce98ef738d1e](https://github.com/puppetlabs/apisprout/commit/4a95528cadbd174f1b4d32dc28d4ce98ef738d1e))
+
 # [1.4.0](https://github.com/puppetlabs/apisprout/compare/v1.3.0...v1.4.0) (2019-08-18)
 
 
