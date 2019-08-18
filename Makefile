@@ -52,7 +52,7 @@ generate:
 
 .PHONY: build
 build: generate $(BIN_DIR)
-	$(GOVVV) build $(GOFLAGS) -o $(BIN_DIR)/$(CLI_DIST_NAME) .
+	$(GOVVV) build -version "$(CLI_DIST_VERSION)" $(GOFLAGS) -o $(BIN_DIR)/$(CLI_DIST_NAME) .
 
 .PHONY: test
 test: generate
@@ -69,7 +69,7 @@ dist-container: dist-container-version
 
 .PHONY: dist-container-version
 dist-container-version:
-	$(DOCKER) build -t "$(DOCKER_DIST_NAME):$(CLI_DIST_VERSION)" .
+	$(DOCKER) build --build-arg CLI_DIST_VERSION -t "$(DOCKER_DIST_NAME):$(CLI_DIST_VERSION)" .
 
 ifneq ($(DOCKER_DIST_TAG),)
 dist-container: dist-container-named
@@ -108,6 +108,6 @@ $(CLI_DIST_TARGETS): export GOFLAGS += -a
 $(CLI_DIST_TARGETS): export GOOS = $(word 1,$(subst -, ,$*))
 $(CLI_DIST_TARGETS): export GOARCH = $(subst $(CLI_EXT_$(GOOS)),,$(word 2,$(subst -, ,$*)))
 $(CLI_DIST_TARGETS): export LDFLAGS += -extldflags "-static"
-$(CLI_DIST_TARGETS): export LDFLAGS += $(shell $(GOVVV) -flags)
+$(CLI_DIST_TARGETS): export LDFLAGS += $(shell $(GOVVV) -flags -version "$(CLI_DIST_VERSION)")
 $(CLI_DIST_TARGETS): dist-bin-%: $(ARTIFACTS_DIR)
 	@scripts/dist

@@ -3,7 +3,7 @@ module github.com/puppetlabs/apisprout
 go 1.12
 
 require (
-	github.com/ahmetb/govvv v0.2.0
+	github.com/ahmetb/govvv v0.2.1-0.20171102043829-eeed55f64b03
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/getkin/kin-openapi v0.2.0
 	github.com/gobwas/glob v0.2.3

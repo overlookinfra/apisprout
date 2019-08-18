@@ -31,6 +31,9 @@ import (
 // GitSummary is filled in by `govvv` for version info.
 var GitSummary string
 
+// Version is filled in by `govvv` for version info.
+var Version string
+
 var (
 	// ErrNoExample is sent when no example was found for an operation.
 	ErrNoExample = errors.New("No example found")
@@ -101,11 +104,16 @@ func main() {
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 
+	version := Version
+	if version == "" {
+		version = GitSummary
+	}
+
 	// Build the root command. This is the application's entry point.
 	cmd := filepath.Base(os.Args[0])
 	root := &cobra.Command{
 		Use:     fmt.Sprintf("%s [flags] FILE", cmd),
-		Version: GitSummary,
+		Version: version,
 		Args:    cobra.MinimumNArgs(1),
 		Run:     server,
 		Example: fmt.Sprintf("  # Basic usage\n  %s openapi.yaml\n\n  # Validate server name and use base path\n  %s --validate-server openapi.yaml\n\n  # Fetch API via HTTP with custom auth header\n  %s -H 'Authorization: abc123' http://example.com/openapi.yaml", cmd, cmd, cmd),
