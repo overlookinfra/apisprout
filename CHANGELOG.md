@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/puppetlabs/apisprout/compare/v1.5.0...v1.5.1) (2019-08-18)
+
+
+### Fix
+
+* Use the correct version number in releases ([873e042b6c3d455613dbfe21eee32e7094048b83](https://github.com/puppetlabs/apisprout/commit/873e042b6c3d455613dbfe21eee32e7094048b83))
+
 # [1.5.0](https://github.com/puppetlabs/apisprout/compare/v1.4.0...v1.5.0) (2019-08-18)
 
 
