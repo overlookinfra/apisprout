@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +41,11 @@ var (
 	// ErrMissingAuth is set when no authorization header or key is present but
 	// one is required by the API description.
 	ErrMissingAuth = errors.New("Missing auth")
+)
+
+var (
+	marshalJSONMatcher = regexp.MustCompile(`^application/(vnd\..+\+)json$`)
+	marshalYAMLMatcher = regexp.MustCompile(`^(application|text)/(x-|vnd\..+\+)yaml$`)
 )
 
 // ContentNegotiator is used to match a media type during content negotiation
@@ -564,12 +570,11 @@ func server(cmd *cobra.Command, args []string) {
 		} else if _, ok := example.([]byte); ok {
 			encoded = example.([]byte)
 		} else {
-			switch mediatype {
-			case "application/json", "application/vnd.api+json":
+			if marshalJSONMatcher.MatchString(mediatype) {
 				encoded, err = json.MarshalIndent(example, "", "  ")
-			case "application/x-yaml", "application/yaml", "text/x-yaml", "text/yaml", "text/vnd.yaml":
+			} else if marshalYAMLMatcher.MatchString(mediatype) {
 				encoded, err = yaml.Marshal(example)
-			default:
+			} else {
 				log.Printf("Cannot marshal as '%s'!", mediatype)
 				err = ErrCannotMarshal
 			}
