@@ -9,17 +9,7 @@
 
 * Match all relevant JSON and YAML media types ([e046dd2a99faffd5b3d365459c980393913f610b](https://github.com/puppetlabs/apisprout/commit/e046dd2a99faffd5b3d365459c980393913f610b))
 
-# Changelog
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
-and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-- Return header examples when possible.
-- Update dependency versions.
-
-## [1.3.0] - 2019-03-18
+# [1.3.0] - 2019-03-18
 - Add `--add-server` to add a custom server when using `--validate-server`.
   This allows quickly adding a custom domain or base path that will properly
   validate.
@@ -36,17 +26,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Enhance example-from-schema generation code. Support enums, string formats,
   array and object examples, min/max and min items.
 
-## [1.2.0] - 2019-02-27
+# [1.2.0] - 2019-02-27
 - Add support for reloading OpenAPI URLs via `/__reload` on the server.
 - Support external references in OpenAPI loader.
 - Update dependencies, simplify file loading.
 - Support jsonapi.org content type (`application/vnd.api+json`).
 - Switch from `dep` to Go modules.
 
-## [1.1.1] - 2019-01-30
+# [1.1.1] - 2019-01-30
 - Fix `OPTIONS` request to also include CORS headers.
 
-## [1.1.0] - 2019-01-29
+# [1.1.0] - 2019-01-29
 - Added the `--watch` (short `-w`) parameter to reload whenever the input file
   changes. This currently only works when using files on disk.
 - Update Docker build to use Go 1.11.
@@ -55,8 +45,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Add CORS headers. Disable with `--disable-cors`.
 - Documentation updates.
 
-## [1.0.1] - 2018-10-03
+# [1.0.1] - 2018-10-03
 - Dependency updates, fixes string format validation bug.
 
-## [1.0.0] - 2018-07-24
+# [1.0.0] - 2018-07-24
 - Initial release.
