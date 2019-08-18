@@ -1,9 +1,9 @@
-module github.com/danielgtaylor/apisprout
+module github.com/puppetlabs/apisprout
 
 go 1.12
 
 require (
-	github.com/davecgh/go-spew v1.1.1
+	github.com/ahmetb/govvv v0.2.0
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/getkin/kin-openapi v0.2.0
 	github.com/gobwas/glob v0.2.3

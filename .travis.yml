@@ -1,6 +1,20 @@
-dist: xenial
 language: go
 go:
-- stable
+- 1.12.x
 env:
-- GO111MODULE=on
+  global:
+  - GO111MODULE=on
+  - secure: H+wAmtsdXaY0om1tEmwUAKrHAnpKJFu/jZAKJulNogLDY0M8rxUAELWD3/XJaSGi4y5z5CXdyJTKQO54ZXE4wYuovnFQvXijXiCs0vX6NyrhDyS+8m66hMHRUpPEJcCjPM7II3pbfjsh8Tn6xOMl/2nR3jag5+B7dGRCkEh5hoo/o9hgakuBCUZimPthvBD93xQFYfgK1Dl7mA6gcbHYUd5dZTHYO9TRelzURd9qx6ke5mZpunFHvUySVDtZKXZ0ehmz301eqnX6As8Sj264mkyfja4iY+JP2eRkx7FngOVO9wpkZAzZD8P2b1rUE5BgJeBf8g3CgzsfkNDhZTGRnpEchaRRY571STmex5T1hW+9mf+fWqfOOU4EtmcJOP7YmmeXlwImoF4Tou5App2bV8YX/yCssakg/Ekq5IFwrRRFSV46iV2P34kneW65uRN2fdtnkVJodPagNUDwQ7DjN6S5dPOOckWY88t2gHCyQ1uEP2qzpw0ZNmr7zULD3Ty8EV+1lvssVK16e0nqfPi6XEReKAUHun/VYJGo1TBioPiWkgBdNWQVABA85sErKooeudKyypkIFboiE2AGqced+6P4dszl79YrvltFk+BiHzV39mhv5Bp2dtSpjWBLTj8D8f/BexB46DJ9/xSkOE8WXI9mftwf7TfAImETil+poWw=
+before_install:
+- '[ -n "${GCR_KEY}" ] && docker login -u _json_key --password-stdin https://gcr.io <<<"${GCR_KEY}"'
+- export CLI_DIST_BRANCH="${TRAVIS_BRANCH}"
+script:
+- make
+- make test
+jobs:
+  include:
+  - stage: deploy
+    deploy:
+      provider: script
+      skip_cleanup: true
+      script: sh -c 'npm install && npx semantic-release'

@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: "{{ .Values.appname }}"
-        image: danielgtaylor/apisprout
+        image: gcr.io/nebula-contrib/apisprout
         args: [ "{{required "The value .Values.apiyamlpath required!" .Values.apiyamlpath }}" ]
         ports:
           - name: http

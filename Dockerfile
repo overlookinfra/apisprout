@@ -2,8 +2,7 @@ FROM golang:1.12-alpine as build
 WORKDIR /apisprout
 COPY . .
 RUN apk add --no-cache git && \
-  go get github.com/ahmetb/govvv && \
-  govvv install
+  go run github.com/ahmetb/govvv install
 
 FROM alpine:3.8
 COPY --from=build /go/bin/apisprout /usr/local/bin/
