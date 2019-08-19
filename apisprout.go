@@ -47,9 +47,25 @@ var (
 )
 
 var (
-	marshalJSONMatcher = regexp.MustCompile(`^application/(vnd\..+\+)json$`)
-	marshalYAMLMatcher = regexp.MustCompile(`^(application|text)/(x-|vnd\..+\+)yaml$`)
+	marshalJSONMatcher = regexp.MustCompile(`^application/(vnd\..+\+)?json$`)
+	marshalYAMLMatcher = regexp.MustCompile(`^(application|text)/(x-|vnd\..+\+)?yaml$`)
 )
+
+type RefreshableRouter struct {
+	router *openapi3filter.Router
+}
+
+func (rr *RefreshableRouter) Set(router *openapi3filter.Router) {
+	rr.router = router
+}
+
+func (rr *RefreshableRouter) Get() *openapi3filter.Router {
+	return rr.router
+}
+
+func NewRefreshableRouter() *RefreshableRouter {
+	return &RefreshableRouter{}
+}
 
 // ContentNegotiator is used to match a media type during content negotiation
 // of HTTP requests.
@@ -325,136 +341,8 @@ func load(uri string, data []byte) (swagger *openapi3.Swagger, router *openapi3f
 	return
 }
 
-// server loads an OpenAPI file and runs a mock server using the paths and
-// examples defined in the file.
-func server(cmd *cobra.Command, args []string) {
-	var swagger *openapi3.Swagger
-	var router *openapi3filter.Router
-
-	uri := args[0]
-
-	var err error
-	var data []byte
-
-	// Load either from an HTTP URL or from a local file depending on the passed
-	// in value.
-	if strings.HasPrefix(uri, "http") {
-		req, err := http.NewRequest("GET", uri, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if customHeader := viper.GetString("header"); customHeader != "" {
-			header := strings.Split(customHeader, ":")
-			if len(header) != 2 {
-				log.Fatal("Header format is invalid.")
-			}
-			req.Header.Add(strings.TrimSpace(header[0]), strings.TrimSpace(header[1]))
-		}
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		data, err = ioutil.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if viper.GetBool("watch") {
-			log.Fatal("Watching a URL is not supported.")
-		}
-	} else {
-		data, err = ioutil.ReadFile(uri)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if viper.GetBool("watch") {
-			// Set up a new filesystem watcher and reload the router every time
-			// the file has changed on disk.
-			watcher, err := fsnotify.NewWatcher()
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer watcher.Close()
-
-			go func() {
-				// Since waiting for events or errors is blocking, we do this in a
-				// goroutine. It loops forever here but will exit when the process
-				// is finished, e.g. when you `ctrl+c` to exit.
-				for {
-					select {
-					case event, ok := <-watcher.Events:
-						if !ok {
-							return
-						}
-						if event.Op&fsnotify.Write == fsnotify.Write {
-							fmt.Printf("🌙 Reloading %s\n", uri)
-							data, err = ioutil.ReadFile(uri)
-							if err != nil {
-								log.Fatal(err)
-							}
-
-							if s, r, err := load(uri, data); err == nil {
-								swagger = s
-								router = r
-							} else {
-								log.Printf("ERROR: Unable to load OpenAPI document: %s", err)
-							}
-						}
-					case err, ok := <-watcher.Errors:
-						if !ok {
-							return
-						}
-						fmt.Println("error:", err)
-					}
-				}
-			}()
-
-			watcher.Add(uri)
-		}
-	}
-
-	swagger, router, err = load(uri, data)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if strings.HasPrefix(uri, "http") {
-		http.HandleFunc("/__reload", func(w http.ResponseWriter, r *http.Request) {
-			resp, err := http.Get(uri)
-			if err != nil {
-				log.Printf("ERROR: %v", err)
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("error while reloading"))
-				return
-			}
-
-			data, err = ioutil.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				log.Printf("ERROR: %v", err)
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("error while parsing"))
-				return
-			}
-
-			if s, r, err := load(uri, data); err == nil {
-				swagger = s
-				router = r
-			}
-
-			w.WriteHeader(200)
-			w.Write([]byte("reloaded"))
-			log.Printf("Reloaded from %s", uri)
-		})
-	}
-
-	// Register our custom HTTP handler that will use the router to find
-	// the appropriate OpenAPI operation and try to return an example.
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+var handler = func(rr *RefreshableRouter) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if !viper.GetBool("disable-cors") {
 			corsOrigin := req.Header.Get("Origin")
 			if corsOrigin == "" {
@@ -508,7 +396,7 @@ func server(cmd *cobra.Command, args []string) {
 			info = fmt.Sprintf("%s %v", req.Method, req.URL)
 		}
 
-		route, pathParams, err := router.FindRoute(req.Method, req.URL)
+		route, pathParams, err := rr.Get().FindRoute(req.Method, req.URL)
 		if err != nil {
 			log.Printf("ERROR: %s => %v", info, err)
 			w.WriteHeader(http.StatusNotFound)
@@ -619,6 +507,140 @@ func server(cmd *cobra.Command, args []string) {
 		w.WriteHeader(status)
 		w.Write(encoded)
 	})
+}
+
+// server loads an OpenAPI file and runs a mock server using the paths and
+// examples defined in the file.
+func server(cmd *cobra.Command, args []string) {
+	var swagger *openapi3.Swagger
+	rr := NewRefreshableRouter()
+
+	uri := args[0]
+
+	var err error
+	var data []byte
+
+	// Load either from an HTTP URL or from a local file depending on the passed
+	// in value.
+	if strings.HasPrefix(uri, "http") {
+		req, err := http.NewRequest("GET", uri, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if customHeader := viper.GetString("header"); customHeader != "" {
+			header := strings.Split(customHeader, ":")
+			if len(header) != 2 {
+				log.Fatal("Header format is invalid.")
+			}
+			req.Header.Add(strings.TrimSpace(header[0]), strings.TrimSpace(header[1]))
+		}
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		data, err = ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if viper.GetBool("watch") {
+			log.Fatal("Watching a URL is not supported.")
+		}
+	} else {
+		data, err = ioutil.ReadFile(uri)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if viper.GetBool("watch") {
+			// Set up a new filesystem watcher and reload the router every time
+			// the file has changed on disk.
+			watcher, err := fsnotify.NewWatcher()
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer watcher.Close()
+
+			go func() {
+				// Since waiting for events or errors is blocking, we do this in a
+				// goroutine. It loops forever here but will exit when the process
+				// is finished, e.g. when you `ctrl+c` to exit.
+				for {
+					select {
+					case event, ok := <-watcher.Events:
+						if !ok {
+							return
+						}
+						if event.Op&fsnotify.Write == fsnotify.Write {
+							fmt.Printf("🌙 Reloading %s\n", uri)
+							data, err = ioutil.ReadFile(uri)
+							if err != nil {
+								log.Fatal(err)
+							}
+
+							if s, r, err := load(uri, data); err == nil {
+								swagger = s
+								rr.Set(r)
+							} else {
+								log.Printf("ERROR: Unable to load OpenAPI document: %s", err)
+							}
+						}
+					case err, ok := <-watcher.Errors:
+						if !ok {
+							return
+						}
+						fmt.Println("error:", err)
+					}
+				}
+			}()
+
+			watcher.Add(uri)
+		}
+	}
+
+	swagger, router, err := load(uri, data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rr.Set(router)
+
+	if strings.HasPrefix(uri, "http") {
+		http.HandleFunc("/__reload", func(w http.ResponseWriter, r *http.Request) {
+			resp, err := http.Get(uri)
+			if err != nil {
+				log.Printf("ERROR: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("error while reloading"))
+				return
+			}
+
+			data, err = ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				log.Printf("ERROR: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("error while parsing"))
+				return
+			}
+
+			if s, r, err := load(uri, data); err == nil {
+				swagger = s
+				rr.Set(r)
+			}
+
+			w.WriteHeader(200)
+			w.Write([]byte("reloaded"))
+			log.Printf("Reloaded from %s", uri)
+		})
+	}
+
+	// Register our custom HTTP handler that will use the router to find
+	// the appropriate OpenAPI operation and try to return an example.
+	http.Handle("/", handler(rr))
 
 	fmt.Printf("🌱 Sprouting %s on port %d", swagger.Info.Title, viper.GetInt("port"))
 
