@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/puppetlabs/apisprout/compare/v1.5.1...v1.5.2) (2019-08-19)
+
+
+### Fix
+
+* Correct parsing of application/json, application/yaml, and text/yaml media types ([e80268d7311214901f1964d63e54891381a2344e](https://github.com/puppetlabs/apisprout/commit/e80268d7311214901f1964d63e54891381a2344e))
+
 ## [1.5.1](https://github.com/puppetlabs/apisprout/compare/v1.5.0...v1.5.1) (2019-08-18)
 
 
