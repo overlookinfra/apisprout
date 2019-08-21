@@ -542,6 +542,18 @@ func TestRecursiveSchema(t *testing.T) {
 			"Test",
 			``,
 		},
+		{
+			"Seeing the same schema twice non-recursively",
+			exampleFixture(t, "recursive_seen_twice.yml"),
+			"Test",
+			`{"ref_a": {"spud": "potato"}, "ref_b": {"spud": "potato"}}`,
+		},
+		{
+			"Cyclical dependencies",
+			exampleFixture(t, "recursive_cycles.yml"),
+			"Front",
+			``,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -550,9 +562,10 @@ func TestRecursiveSchema(t *testing.T) {
 
 			ex, err := OpenAPIExample(ModeResponse, swagger.Components.Schemas[test.schema].Value)
 			if test.out == "" {
-				assert.Nil(t, ex)
 				assert.Error(t, err)
+				assert.Nil(t, ex)
 			} else {
+				assert.Nil(t, err)
 				// Expected to match the output.
 				var expected interface{}
 				json.Unmarshal([]byte(test.out), &expected)
