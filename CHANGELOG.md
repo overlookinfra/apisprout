@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/puppetlabs/apisprout/compare/v1.5.3...v1.6.0) (2019-08-21)
+
+
+### Update
+
+* Allow statuses sent with Prefer to select the default response ([7fbe771bcbb16e96e3245d3c71a9cc21bbc4c42b](https://github.com/puppetlabs/apisprout/commit/7fbe771bcbb16e96e3245d3c71a9cc21bbc4c42b))
+
 ## [1.5.3](https://github.com/puppetlabs/apisprout/compare/v1.5.2...v1.5.3) (2019-08-21)
 
 
