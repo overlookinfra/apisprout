@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/puppetlabs/apisprout/compare/v1.6.0...v1.6.1) (2019-08-21)
+
+
+### Fix
+
+* Correctly process sibling references to the same schema ([2487a057d41e4c9eb065f7dacb85b9f6afb57c52](https://github.com/puppetlabs/apisprout/commit/2487a057d41e4c9eb065f7dacb85b9f6afb57c52))
+
 # [1.6.0](https://github.com/puppetlabs/apisprout/compare/v1.5.3...v1.6.0) (2019-08-21)
 
 
