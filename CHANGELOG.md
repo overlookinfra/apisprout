@@ -1,3 +1,10 @@
+## [1.5.3](https://github.com/puppetlabs/apisprout/compare/v1.5.2...v1.5.3) (2019-08-21)
+
+
+### Fix
+
+* Handle recursive schemas correctly ([25dcf4aff50c60017d5f11f5a38fcd77f096eb9c](https://github.com/puppetlabs/apisprout/commit/25dcf4aff50c60017d5f11f5a38fcd77f096eb9c))
+
 ## [1.5.2](https://github.com/puppetlabs/apisprout/compare/v1.5.1...v1.5.2) (2019-08-19)
 
 
