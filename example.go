@@ -103,18 +103,32 @@ func isRequired(schema *openapi3.Schema, key string) bool {
 	return false
 }
 
-var seenValue = struct{}{}
+type cachedSchema struct {
+	pending bool
+	out     interface{}
+}
 
-func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schema]struct{}) (interface{}, error) {
+func openAPIExample(mode Mode, schema *openapi3.Schema, cache map[*openapi3.Schema]*cachedSchema) (out interface{}, err error) {
 	if ex, ok := getSchemaExample(schema); ok {
 		return ex, nil
 	}
 
-	if _, ok := seen[schema]; ok {
+	cached, ok := cache[schema]
+	if !ok {
+		cached = &cachedSchema{
+			pending: true,
+		}
+		cache[schema] = cached
+	} else if cached.pending {
 		return nil, ErrRecursive
+	} else {
+		return cached.out, nil
 	}
 
-	seen[schema] = seenValue
+	defer func() {
+		cached.pending = false
+		cached.out = out
+	}()
 
 	// Handle combining keywords
 	if len(schema.OneOf) > 0 {
@@ -122,7 +136,7 @@ func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schem
 		var err error
 
 		for _, candidate := range schema.OneOf {
-			ex, err = openAPIExample(mode, candidate.Value, seen)
+			ex, err = openAPIExample(mode, candidate.Value, cache)
 			if err == nil {
 				break
 			}
@@ -135,7 +149,7 @@ func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schem
 		var err error
 
 		for _, candidate := range schema.AnyOf {
-			ex, err = openAPIExample(mode, candidate.Value, seen)
+			ex, err = openAPIExample(mode, candidate.Value, cache)
 			if err == nil {
 				break
 			}
@@ -147,7 +161,7 @@ func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schem
 		example := map[string]interface{}{}
 
 		for _, allOf := range schema.AllOf {
-			candidate, err := openAPIExample(mode, allOf.Value, seen)
+			candidate, err := openAPIExample(mode, allOf.Value, cache)
 			if err != nil {
 				return nil, err
 			}
@@ -224,7 +238,7 @@ func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schem
 		example := []interface{}{}
 
 		if schema.Items != nil && schema.Items.Value != nil {
-			ex, err := openAPIExample(mode, schema.Items.Value, seen)
+			ex, err := openAPIExample(mode, schema.Items.Value, cache)
 			if err != nil {
 				return nil, fmt.Errorf("can't get example for array item: %+v", err)
 			}
@@ -245,7 +259,7 @@ func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schem
 				continue
 			}
 
-			ex, err := openAPIExample(mode, v.Value, seen)
+			ex, err := openAPIExample(mode, v.Value, cache)
 			if err == ErrRecursive {
 				if isRequired(schema, k) {
 					return nil, fmt.Errorf("can't get example for '%s': %+v", k, err)
@@ -261,7 +275,7 @@ func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schem
 			addl := schema.AdditionalProperties.Value
 
 			if !excludeFromMode(mode, addl) {
-				ex, err := openAPIExample(mode, addl, seen)
+				ex, err := openAPIExample(mode, addl, cache)
 				if err == ErrRecursive {
 					// We just won't add this if it's recursive.
 				} else if err != nil {
@@ -282,5 +296,5 @@ func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schem
 // object, which is an extended subset of JSON Schema.
 // https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.1.md#schemaObject
 func OpenAPIExample(mode Mode, schema *openapi3.Schema) (interface{}, error) {
-	return openAPIExample(mode, schema, make(map[*openapi3.Schema]struct{}))
+	return openAPIExample(mode, schema, make(map[*openapi3.Schema]*cachedSchema))
 }
