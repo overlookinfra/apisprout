@@ -92,26 +92,62 @@ func excludeFromMode(mode Mode, schema *openapi3.Schema) bool {
 	return false
 }
 
-// OpenAPIExample creates an example structure from an OpenAPI 3 schema
-// object, which is an extended subset of JSON Schema.
-// https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.1.md#schemaObject
-func OpenAPIExample(mode Mode, schema *openapi3.Schema) (interface{}, error) {
+// isRequired checks whether a key is actually required.
+func isRequired(schema *openapi3.Schema, key string) bool {
+	for _, req := range schema.Required {
+		if req == key {
+			return true
+		}
+	}
+
+	return false
+}
+
+var seenValue = struct{}{}
+
+func openAPIExample(mode Mode, schema *openapi3.Schema, seen map[*openapi3.Schema]struct{}) (interface{}, error) {
 	if ex, ok := getSchemaExample(schema); ok {
 		return ex, nil
 	}
 
+	if _, ok := seen[schema]; ok {
+		return nil, ErrRecursive
+	}
+
+	seen[schema] = seenValue
+
 	// Handle combining keywords
 	if len(schema.OneOf) > 0 {
-		return OpenAPIExample(mode, schema.OneOf[0].Value)
+		var ex interface{}
+		var err error
+
+		for _, candidate := range schema.OneOf {
+			ex, err = openAPIExample(mode, candidate.Value, seen)
+			if err == nil {
+				break
+			}
+		}
+
+		return ex, err
 	}
 	if len(schema.AnyOf) > 0 {
-		return OpenAPIExample(mode, schema.AnyOf[0].Value)
+		var ex interface{}
+		var err error
+
+		for _, candidate := range schema.AnyOf {
+			ex, err = openAPIExample(mode, candidate.Value, seen)
+			if err == nil {
+				break
+			}
+		}
+
+		return ex, err
 	}
 	if len(schema.AllOf) > 0 {
 		example := map[string]interface{}{}
 
 		for _, allOf := range schema.AllOf {
-			candidate, err := OpenAPIExample(mode, allOf.Value)
+			candidate, err := openAPIExample(mode, allOf.Value, seen)
 			if err != nil {
 				return nil, err
 			}
@@ -188,9 +224,9 @@ func OpenAPIExample(mode Mode, schema *openapi3.Schema) (interface{}, error) {
 		example := []interface{}{}
 
 		if schema.Items != nil && schema.Items.Value != nil {
-			ex, err := OpenAPIExample(mode, schema.Items.Value)
+			ex, err := openAPIExample(mode, schema.Items.Value, seen)
 			if err != nil {
-				return nil, fmt.Errorf("can't get example for array item")
+				return nil, fmt.Errorf("can't get example for array item: %+v", err)
 			}
 
 			example = append(example, ex)
@@ -209,24 +245,30 @@ func OpenAPIExample(mode Mode, schema *openapi3.Schema) (interface{}, error) {
 				continue
 			}
 
-			ex, err := OpenAPIExample(mode, v.Value)
-			if err != nil {
-				return nil, fmt.Errorf("can't get example for '%s'", k)
+			ex, err := openAPIExample(mode, v.Value, seen)
+			if err == ErrRecursive {
+				if isRequired(schema, k) {
+					return nil, fmt.Errorf("can't get example for '%s': %+v", k, err)
+				}
+			} else if err != nil {
+				return nil, fmt.Errorf("can't get example for '%s': %+v", k, err)
+			} else {
+				example[k] = ex
 			}
-
-			example[k] = ex
 		}
 
 		if schema.AdditionalProperties != nil && schema.AdditionalProperties.Value != nil {
 			addl := schema.AdditionalProperties.Value
 
 			if !excludeFromMode(mode, addl) {
-				ex, err := OpenAPIExample(mode, addl)
-				if err != nil {
-					return nil, fmt.Errorf("can't get example for additional properties")
+				ex, err := openAPIExample(mode, addl, seen)
+				if err == ErrRecursive {
+					// We just won't add this if it's recursive.
+				} else if err != nil {
+					return nil, fmt.Errorf("can't get example for additional properties: %+v", err)
+				} else {
+					example["additionalPropertyName"] = ex
 				}
-
-				example["additionalPropertyName"] = ex
 			}
 		}
 
@@ -234,4 +276,11 @@ func OpenAPIExample(mode Mode, schema *openapi3.Schema) (interface{}, error) {
 	}
 
 	return nil, ErrNoExample
+}
+
+// OpenAPIExample creates an example structure from an OpenAPI 3 schema
+// object, which is an extended subset of JSON Schema.
+// https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.1.md#schemaObject
+func OpenAPIExample(mode Mode, schema *openapi3.Schema) (interface{}, error) {
+	return openAPIExample(mode, schema, make(map[*openapi3.Schema]struct{}))
 }
