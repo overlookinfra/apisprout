@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/puppetlabs/apisprout/compare/v1.6.1...v1.7.0) (2019-10-29)
+
+
+### Update
+
+* Integrate upstream changes ([38a1e2ff3b84fcae46eb32562b506a0932cd0283](https://github.com/puppetlabs/apisprout/commit/38a1e2ff3b84fcae46eb32562b506a0932cd0283))
+
 ## [1.6.1](https://github.com/puppetlabs/apisprout/compare/v1.6.0...v1.6.1) (2019-08-21)
 
 
