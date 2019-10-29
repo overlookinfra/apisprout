@@ -148,6 +148,9 @@ func main() {
 	addParameter(flags, "disable-cors", "", false, "Disable CORS headers")
 	addParameter(flags, "header", "H", "", "Add a custom header when fetching API")
 	addParameter(flags, "add-server", "", "", "Add a new valid server URL, use with --validate-server")
+	addParameter(flags, "https", "", false, "Use HTTPS instead of HTTP")
+	addParameter(flags, "public-key", "", "", "Public key for HTTPS, use with --https")
+	addParameter(flags, "private-key", "", "", "Private key for HTTPS, use with --https")
 
 	// Run the app!
 	root.Execute()
@@ -170,21 +173,32 @@ func addParameter(flags *pflag.FlagSet, name, short string, def interface{}, des
 
 // getTypedExample will return an example from a given media type, if such an
 // example exists. If multiple examples are given, then one is selected at
-// random.
-func getTypedExample(mt *openapi3.MediaType) (interface{}, error) {
+// random unless an "example" item exists in the Prefer header
+func getTypedExample(mt *openapi3.MediaType, prefer map[string]string) (interface{}, error) {
 	if mt.Example != nil {
 		return mt.Example, nil
 	}
 
 	if len(mt.Examples) > 0 {
+		// If preferred example requested and it it exists, return it
+		preferredExample := ""
+		if mapContainsKey(prefer, "example") {
+			preferredExample = prefer["example"]
+			if _, ok := mt.Examples[preferredExample]; ok {
+				return mt.Examples[preferredExample].Value.Value, nil
+			}
+		}
+
 		// Choose a random example to return.
 		keys := make([]string, 0, len(mt.Examples))
 		for k := range mt.Examples {
 			keys = append(keys, k)
 		}
 
-		selected := keys[rand.Intn(len(keys))]
-		return mt.Examples[selected].Value.Value, nil
+		if len(keys) > 0 {
+			selected := keys[rand.Intn(len(keys))]
+			return mt.Examples[selected].Value.Value, nil
+		}
 	}
 
 	if mt.Schema != nil {
@@ -196,11 +210,12 @@ func getTypedExample(mt *openapi3.MediaType) (interface{}, error) {
 }
 
 // getExample tries to return an example for a given operation.
-func getExample(negotiator *ContentNegotiator, prefer string, op *openapi3.Operation) (int, string, map[string]*openapi3.HeaderRef, interface{}, error) {
+// Using the Prefer http header, the consumer can specify the type of response they want.
+func getExample(negotiator *ContentNegotiator, prefer map[string]string, op *openapi3.Operation) (int, string, map[string]*openapi3.HeaderRef, interface{}, error) {
 	var responses []string
 	var blankHeaders = make(map[string]*openapi3.HeaderRef)
 
-	if prefer == "" {
+	if !mapContainsKey(prefer, "status") {
 		// First, make a list of responses ordered by successful (200-299 status code)
 		// before other types.
 		success := make([]string, 0)
@@ -213,8 +228,8 @@ func getExample(negotiator *ContentNegotiator, prefer string, op *openapi3.Opera
 			other = append(other, s)
 		}
 		responses = append(success, other...)
-	} else if op.Responses[prefer] != nil {
-		responses = []string{prefer}
+	} else if op.Responses[prefer["status"]] != nil {
+		responses = []string{prefer["status"]}
 	} else if op.Responses["default"] != nil {
 		responses = []string{"default"}
 	} else {
@@ -228,7 +243,7 @@ func getExample(negotiator *ContentNegotiator, prefer string, op *openapi3.Opera
 		if err != nil {
 			// If we are using the default with prefer, we can use its status
 			// code:
-			status, err = strconv.Atoi(prefer)
+			status, err = strconv.Atoi(prefer["status"])
 		}
 		if err != nil {
 			// Otherwise, treat default and other named statuses as 200.
@@ -246,7 +261,7 @@ func getExample(negotiator *ContentNegotiator, prefer string, op *openapi3.Opera
 				continue
 			}
 
-			example, err := getTypedExample(content)
+			example, err := getTypedExample(content, prefer)
 			if err == nil {
 				return status, mt, response.Value.Headers, example, nil
 			}
@@ -350,6 +365,66 @@ func load(uri string, data []byte) (swagger *openapi3.Swagger, router *openapi3f
 	return
 }
 
+// parsePreferHeader takes the value of a prefer header and splits it out into key value pairs
+//
+// HTTP Prefer header specification examples:
+// - Prefer: status=200; example="something"
+// - Prefer: example=something;status=200;
+// - Prefer: example="somet,;hing";status=200;
+//
+// As part of the Prefer specification, it is completely valid to specify
+// multiple Prefer headers in a single request, however we won't be
+// supporting that for the moment and only the first Prefer header
+// will be used.
+func parsePreferHeader(value string) map[string]string {
+	prefer := map[string]string{}
+	if value != "" {
+		// In the event that something is quoted, we want to pull those items out of the string
+		// and save them for later, so they don't conflict with other splitting logic.
+
+		quotedRegex := regexp.MustCompile(`"[^"]*"`)
+		splitRegex := regexp.MustCompile(`(,|;| )`)
+		wilcardRegex := regexp.MustCompile(`%%([0-9]+)%%`)
+
+		quotedStrings := quotedRegex.FindAllString(value, -1)
+		if len(quotedStrings) > 0 {
+			// replace each quoted string with a placehoder
+			for idx, quotedString := range quotedStrings {
+				value = strings.Replace(value, quotedString, fmt.Sprintf("%%%%%v%%%%", idx), 1)
+			}
+		}
+
+		pairs := splitRegex.Split(value, -1)
+		for _, pair := range pairs {
+			pair = strings.TrimSpace(pair)
+			if pair != "" {
+				// Put any wildcards back
+				wildcardStrings := wilcardRegex.FindAllStringSubmatch(pair, -1)
+				for _, wildcard := range wildcardStrings {
+					quotedIdx, _ := strconv.Atoi(wildcard[1])
+					pair = strings.Replace(pair, wildcard[0], quotedStrings[quotedIdx], 1)
+				}
+
+				// Determine the key and valid for this argument
+				if strings.Contains(pair, "=") {
+					eqIdx := strings.Index(pair, "=")
+					prefer[pair[:eqIdx]] = strings.Trim(pair[eqIdx+1:], `"`)
+				} else {
+					prefer[pair] = ""
+				}
+			}
+		}
+	}
+	return prefer
+}
+
+func mapContainsKey(dict map[string]string, key string) bool {
+	if _, ok := dict[key]; ok {
+		return true
+	}
+	return false
+}
+
 var handler = func(rr *RefreshableRouter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if !viper.GetBool("disable-cors") {
@@ -446,12 +521,7 @@ var handler = func(rr *RefreshableRouter) http.Handler {
 			}
 		}
 
-		prefer := req.Header.Get("Prefer")
-		if strings.HasPrefix(prefer, "status=") {
-			prefer = prefer[7:10]
-		} else {
-			prefer = ""
-		}
+		prefer := parsePreferHeader(req.Header.Get("Prefer"))
 
 		status, mediatype, headers, example, err := getExample(negotiator, prefer, route.Operation)
 		if err != nil {
@@ -528,6 +598,7 @@ func server(cmd *cobra.Command, args []string) {
 
 	var err error
 	var data []byte
+	dataType := strings.Trim(strings.ToLower(filepath.Ext(uri)), ".")
 
 	// Load either from an HTTP URL or from a local file depending on the passed
 	// in value.
@@ -647,11 +718,36 @@ func server(cmd *cobra.Command, args []string) {
 		})
 	}
 
+	// Add a health check route which returns 200
+	http.HandleFunc("/__health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		log.Printf("Health check")
+	})
+
+	// Another custom handler to return the exact swagger document given to us
+	http.HandleFunc("/__schema", func(w http.ResponseWriter, req *http.Request) {
+		if !viper.GetBool("disable-cors") {
+			corsOrigin := req.Header.Get("Origin")
+			if corsOrigin == "" {
+				corsOrigin = "*"
+			}
+			w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+		}
+
+		w.Header().Set("Content-Type", fmt.Sprintf("application/%v; charset=utf-8", dataType))
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(data))
+	})
+
 	// Register our custom HTTP handler that will use the router to find
 	// the appropriate OpenAPI operation and try to return an example.
 	http.Handle("/", handler(rr))
 
-	fmt.Printf("🌱 Sprouting %s on port %d", swagger.Info.Title, viper.GetInt("port"))
+	format := "🌱 Sprouting %s on port %d"
+	if viper.GetBool("https") {
+		format = "🌱 Securely sprouting %s on port %d"
+	}
+	fmt.Printf(format, swagger.Info.Title, viper.GetInt("port"))
 
 	if viper.GetBool("validate-server") && len(swagger.Servers) != 0 {
 		fmt.Printf(" with valid servers:\n")
@@ -662,5 +758,14 @@ func server(cmd *cobra.Command, args []string) {
 		fmt.Printf("\n")
 	}
 
-	http.ListenAndServe(fmt.Sprintf(":%d", viper.GetInt("port")), nil)
+	port := fmt.Sprintf(":%d", viper.GetInt("port"))
+	if viper.GetBool("https") {
+		err = http.ListenAndServeTLS(port, viper.GetString("public-key"),
+			viper.GetString("private-key"), nil)
+	} else {
+		err = http.ListenAndServe(port, nil)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
 }

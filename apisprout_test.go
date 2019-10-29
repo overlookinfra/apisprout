@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -82,6 +83,84 @@ func TestAddLocalServers(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.out, results)
+		})
+	}
+}
+
+func TestParsePreferHeader(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		want   map[string]string
+	}{
+		{
+			name:   "Single",
+			header: "status=200",
+			want: map[string]string{
+				"status": "200",
+			},
+		},
+		{
+			name:   "Single Quotes",
+			header: "status=\"200\"",
+			want: map[string]string{
+				"status": "200",
+			},
+		},
+		{
+			name:   "Single Quotes Space",
+			header: "example=\"in progress\"",
+			want: map[string]string{
+				"example": "in progress",
+			},
+		},
+		{
+			name:   "Multiple Semicolon",
+			header: "status=200;example=complete",
+			want: map[string]string{
+				"status":  "200",
+				"example": "complete",
+			},
+		},
+		{
+			name:   "Multiple Semi Space",
+			header: "status=200; example=complete",
+			want: map[string]string{
+				"status":  "200",
+				"example": "complete",
+			},
+		},
+		{
+			name:   "Multiple Comma",
+			header: "status=200,example=complete",
+			want: map[string]string{
+				"status":  "200",
+				"example": "complete",
+			},
+		},
+		{
+			name:   "Multiple Comma Space",
+			header: "status=200, example=complete",
+			want: map[string]string{
+				"status":  "200",
+				"example": "complete",
+			},
+		},
+		{
+			name:   "Mixed Pairs",
+			header: "example=complete; foo, status=\"200\",",
+			want: map[string]string{
+				"example": "complete",
+				"foo":     "",
+				"status":  "200",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parsePreferHeader(tt.header); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parsePreferHeader() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
